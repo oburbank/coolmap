@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+circle {
+    pointer-events: none;
+}
+
+.districts {
+  stroke: #fff;
+  stroke-width: .5px; /* make responsive? */
+}
+
+.districtinfo {
+  visibility: hidden;
+}
+
+.states {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1px; /* make responsive? */
+}
+
+.fra {
+  visibility: hidden;
+  display: none;
+}
+
+</style>
+<body>
+
+<button type="button" onclick="toggle('.fra')">FRA Districts</button>
+<button type="button" onclick="toggle('.reg')">Existing Districts</button>
+
+<select class="stateselector">
+  <option value="--">--Select State--</option>
+</select>
+
+<!-- <label for="Partisan Lean">Advantage: </label> -->
+<input type="range" name="Partisan Lean" min=-100 max=100 oninput="handleRange(this)"></input>
+
+<div class="breakdown">
+  <div class="bias"></div>
+  <div class="fra"></div>
+  <div class="reg"></div>
+</div>
+
+<div class="districtinfo">
+  <div class="districtname">HIDDEN</div>
+  <div class="repname">HIDDEN</div>
+</div>
+
+<script src="//d3js.org/d3.v4.min.js"></script>
+<script src="//d3js.org/queue.v1.min.js"></script>
+<script src="//d3js.org/topojson.v1.min.js"></script>
+<script>
+
+var width = 960; //make responsive?
+var height = 500; //make responsive?
+var active = "--";
+var radius = 0;
+var district_stroke_width = 0;
+var bias = 0;
+var plan = '.reg';
+var path = d3.geoPath().projection(d3.geoAlbersUsa());
+var g = d3.select("body").append("svg").attr("width", width).attr("height", height).append("g");
+
+function toggle(newplan) {
+  plan = newplan;
+  var oldplan = newplan === '.reg' ? '.fra' : '.reg';
+  d3.selectAll(newplan).style('visibility', 'visible');
+  d3.selectAll(newplan).style('display', 'unset');
+  d3.selectAll(oldplan).style('visibility', 'hidden');
+  d3.selectAll(oldplan).style('display', 'none');
+  recolor();
+}
+
+function arr_to_object(arr, key) {
+  var obj = {};
+  for (var i=0; i<arr.length; i++) {
+    obj[arr[i][key]] = arr[i];
+  }
+  return obj;
+}
+
+var fra_red = 0;
+var fra_purple = 0;
+var fra_blue = 0;
+var reg_red = 0;
+var reg_purple = 0;
+var reg_blue = 0;
+
+function handleRange(obj) {
+  bias = obj.value;
+  recolor();
+}
+
+queue()
+.defer(d3.json, "FV.json")
+.defer(d3.tsv, "FRA.tsv")
+.defer(d3.tsv, "REG.tsv")
+.defer(d3.tsv, "us-state-names.tsv") 
+.await(ready);
+
+function recolor() {
+  fra_red = 0;
+  fra_purple = 0;
+  fra_blue = 0;
+  reg_red = 0;
+  reg_purple = 0;
+  reg_blue = 0;
+  fra_rep_colors = {};
+  d3
+  .selectAll("g.fra path")
+  .style("fill", d=> {
+    var seats = d.properties.reps;
+    var threshold = 1 / (seats + 1);
+    var blueness = Math.max(0,Math.min(1,(parseFloat(d.properties.dem) + parseFloat(bias))/100));
+    var blue = 0
+    var purple = 0;
+    while (blueness > threshold*1.05) {
+      blue++;
+      blueness -= threshold;
+    }
+    if ((blue < seats) && (blueness > threshold*0.95))
+      purple++;
+    var red = seats - blue - purple;
+    if (d.properties.state === active) {
+      fra_rep_colors[d.properties.district] = [red,purple];
+    }
+    fra_blue += blue;
+    fra_red += red;
+    fra_purple += purple;
+    if (red === seats)
+      return "red";
+    if (blue === seats)
+      return "blue";
+    return "purple";
+  });
+  d3
+  .selectAll("circle.fra")
+  .attr("fill", d => {
+    if (fra_rep_colors[d.district][0]) {
+      fra_rep_colors[d.district][0]--;
+      return "red";
+    } else if (fra_rep_colors[d.district][1]) {
+      fra_rep_colors[d.district][1]--;
+      return "purple";
+    } else 
+      return "blue";
+  });
+
+  d3
+  .selectAll("circle.reg")
+  .attr("fill", d => {
+    var blueness = parseFloat(d.dem) + parseFloat(bias);
+    if (blueness > 55) {
+      return "blue";
+    } else if (blueness < 45) {
+      return "red";
+    } else {
+      return "purple";
+    }
+  });
+
+  d3
+  .selectAll("g.reg path")
+  .attr("fill", d => {
+    var blueness = parseFloat(d.properties.dem) + parseFloat(bias);
+    if (blueness > 55) {
+      reg_blue++;
+      return "blue";
+    } else if (blueness < 45) {
+      reg_red++;
+      return "red";
+    } else {
+      reg_purple++;
+      return "purple";
+    }
+  });
+
+  if (bias>0)
+    var bias_msg = "D + " + bias;
+  else if (bias<0)
+    var bias_msg = "R + " + (-bias);
+  else
+    var bias_msg = "Even";
+  d3.select(".breakdown .bias").text("Advantage: " + bias_msg);
+  d3.select(".breakdown .fra").text("D: "+fra_blue+", R: "+fra_red+", Toss-Up: "+fra_purple);
+  d3.select(".breakdown .reg").text("D: "+reg_blue+", R: "+reg_red+", Toss-Up: "+reg_purple);
+}
+
+function ready(error, fv, fra_stats_arr, mopo_stats_arr, id2state_arr) {
+  if (error) throw error;
+  
+  var fra_stats = arr_to_object(fra_stats_arr,"district");
+  var mopo_stats = arr_to_object(mopo_stats_arr,"district");
+  var id2state = arr_to_object(id2state_arr,"id");
+
+  g.append("g").attr("class", "reg");
+  g.append("g").attr("class", "fra");
+  
+  d3.select("g.reg").append("g")
+      .attr("class", "districts")
+    .selectAll("path")
+      .data(topojson.feature(fv, fv.objects.tl_2019_us_cd116).features)
+    .enter().append("path")
+      .attr("d", path)
+      .each(d => {
+            d.properties.state = id2state[parseInt(d.properties.STATEFP)].name;
+            d.properties.reps = 1;
+            var district_number = parseInt(d.properties.CD116FP) || "AL";
+            d.properties.district = d.properties.state+"-"+district_number;
+            d.properties.plan = "reg";
+            var stats = mopo_stats[d.properties.district];
+            d.properties.dem = parseFloat(stats.dem);
+            d.properties.rep = stats.first +" "+ stats.last +" "+ stats.party;
+            d.properties.open = stats.open;
+      })
+      .on("mouseover", handleMouseOver)
+      .on("mouseout", handleMouseOut)
+      .on("click", clicked);
+
+  d3.select("g.fra").append("g")
+      .attr("class", "districts")
+    .selectAll("path")
+      .data(topojson.feature(fv, fv.objects.fra).features)
+    .enter().append("path")
+      .attr("d", path)
+      .each(d => {
+            d.properties.state = d.properties.state.replace("_"," ");
+            d.properties.district = d.properties.fra_district.replace("_"," ");
+            d.properties.reps = parseInt(fra_stats[d.properties.district].seats);
+            d.properties.plan = "fra";
+            d.properties.dem = parseFloat(fra_stats[d.properties.district].dem);
+      })
+      .on("mouseover", handleMouseOver)
+      .on("mouseout", handleMouseOut)
+      .on("click", clicked);
+          
+    var topostates = topojson.feature(fv, fv.objects.state).features;
+
+    g.append("g")
+      .attr("class", "states")
+    .selectAll("path")
+      .data(topostates)
+    .enter().append("path")
+      .attr("d", path)
+      .each(d=>d.properties.state = id2state[parseInt(d.properties.STATEFP)].name);
+
+    var dropdown = d3.select(".stateselector")
+                    .on("change", dropdownChange)
+                    .selectAll("option")
+                    .data(topostates)
+                    .enter().append("option")
+                    .attr("value", d=>d.properties.state)
+                    .text(d=>d.properties.state);
+    recolor();
+}
+
+function dropdownChange(d) {
+    var state = d3.select(this).property('value');
+    if (state === "--") {
+        return reset();
+    }
+    zoom_on_state(state);
+}
+
+function clicked(d) {
+  var state = d.properties.state;
+  if (active === state)
+    return reset();
+  zoom_on_state(state);
+}
+
+function zoom_on_state(state) {
+  active = state;
+  d3.select('option').text("Zoom Out to Entire US");
+  document.querySelector('select').value = state;
+  var d = d3.selectAll('.states path').filter(d => d.properties.state === state).datum();
+  if (state !== "Hawaii" && state !== "Alaska") {
+    var projection = d3.geoAlbers().rotate([-d3.geoCentroid(d)[0],0,0]);
+  } else {
+    var projection = d3.geoAlbersUsa();
+  }
+  projection.fitExtent([[50,50],[width-50,height-50]], d);
+  path.projection(projection);
+  var scale = projection.scale()/d3.geoAlbersUsa().scale();
+  district_stroke_width = scale/5;
+  radius = 2 + scale/2;
+
+  var state_districts = g.selectAll("g.districts path").filter(d=>d.properties.state === state);
+  g.selectAll("g.districts path")
+    .style("stroke-width", district_stroke_width + "px")
+    .style("stroke", "grey")
+    .attr("fill-opacity", "0.1");
+  g.selectAll("g.states").style("stroke-width", scale/10 + "px").style("stroke", "grey");
+  state_districts.attr("fill-opacity","0.0");
+  g.selectAll("path").attr("d",path);
+
+  g.selectAll("circle").remove();
+  var circledata = [];
+
+  g
+  .selectAll(".districts path")
+  .filter(d=>d.properties.state === state)
+  .each((d,i,ns) => {
+    circledata = circledata.concat(getreplocations(ns[i]).map(x => {
+      return {
+        "coords": x, 
+        "district": d.properties.district, 
+        "plan": d.properties.plan,
+        "dem": d.properties.dem};
+      }));
+    });
+
+  g
+  .selectAll("circle")
+  .data(circledata)
+  .enter()
+  .append("circle")
+  .attr("class", d=>d.plan)
+  .attr("cx", d=>d.coords[0])
+  .attr("cy", d=>d.coords[1])
+  .attr("r", radius);
+  zoomedDistrictStroke = "0.5px";
+  toggle(plan);
+    
+}
+
+function reset() {
+  d3.select(".districtname").text("HIDDEN").style("visibility","hidden");
+  d3.select(".repname").text("HIDDEN").style("visibility", "hidden");
+  d3.select('option').text("--Select State--");
+  document.querySelector('select').value = '--';
+  active = "--";
+  
+  g.selectAll("g.districts path").attr("fill-opacity", "1")
+    .style("stroke-width", "0.5px").style("stroke", "white");
+  g.selectAll("g.states").style("stroke-width", "1px").style("stroke", "white");
+  g.selectAll("circle").remove();
+  g.style("stroke-width", "1.5px");
+  path.projection(d3.geoAlbersUsa());
+  d3.selectAll("path").attr("d",path);
+
+}
+
+function getreplocations(district) {
+    var points = [];
+    for (var i=0; i<parseInt(district.__data__.properties.reps); i++) {
+       points.push(pathcenter(district, points)); 
+    }
+    return points;
+}
+
+function pathcenter(path,holes) {
+    var bbox = path.getBBox();
+    var p = document.querySelector('svg').createSVGPoint();
+    var step = Math.min(bbox.width, bbox.height)/30;
+    var remaining = new Set();
+    var holeset = new Set(holes.map(JSON.stringify));
+    for (var x=0; x*step<bbox.width; x++) {
+        for (var y=0; y*step<bbox.height; y++) {
+            p.x = x*step + bbox.x;
+            p.y = y*step + bbox.y;
+            if (path.isPointInFill(p) && !holeset.has(JSON.stringify([p.x, p.y]))) {
+                remaining.add(JSON.stringify([x,y]))
+            }
+        }
+    }
+    var required_neighbors = 4;
+    while (true) {
+        var new_remaining = new Set();
+        for (let item of remaining) {
+            var [x,y] = JSON.parse(item);
+            var neighbors = [[x-1,y],[x+1,y],[x,y-1],[x,y+1]];
+            var inside_neighbors = neighbors.filter(p=>remaining.has(JSON.stringify(p))).length
+            if (inside_neighbors === required_neighbors) {
+                new_remaining.add(item)
+            }
+        }
+        if ((new Set([0,remaining.size])).has(new_remaining.size)) {
+            if (required_neighbors === 1) {
+                var [x,y] = JSON.parse([...remaining].pop());
+                p.x = x*step + bbox.x;
+                p.y = y*step + bbox.y;
+                return [p.x, p.y];
+            } else {
+                required_neighbors--;
+            }
+        } else {
+            remaining = new_remaining;
+            required_neighbors = 4;
+        }
+    }
+}
+
+function handleMouseOut(d) {
+    d3.select(".districtname").text("HIDDEN").style("visibility","hidden");
+    d3.select(".repname").text("HIDDEN").style("visibility","hidden");
+    d3.selectAll('.districts path').filter(d=>d.properties.state===active)
+      .style("stroke-width",district_stroke_width + "px");
+    d3.selectAll('circle').attr("r",radius);
+}
+
+function handleMouseOver(d) {
+    if (active !== "--") {
+        d3.select(".districtname").text(d.properties.state).style("visibility", "visible");
+        var props = d.properties;
+        var lean = parseInt(props.dem) - 50;
+        if (lean > 0)
+            var lean_message = " (D +"+lean+"%)";
+        else if (lean <0)
+            var lean_message = " (R +"+(-lean)+"%)";
+        else
+            var lean_message = " (Toss-Up)";
+        d3.select(".districtname").text(props.district + lean_message).style("visibility", "visible");
+        var rep = props.open === 1 ? "(Open Seat)" : props.rep;
+        if (props.rep)
+            d3.select(".repname").text(rep).style("visibility", "visible");
+        else
+            d3.select(".repname").text("HIDDEN").style("visibility", "hidden");
+        
+	//new styling 
+        d3
+        .selectAll('.districts path')
+        .filter(d=>d.properties.state===active && d.properties.district === props.district)
+        .style("stroke-width", district_stroke_width * 3 + "px");
+
+        d3
+        .selectAll('circle')
+        .filter(d => d.district === props.district)
+        .attr("r",radius*1.33);
+ 
+    }
+}
+
+</script>
+
