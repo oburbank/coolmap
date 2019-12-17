@@ -37,7 +37,7 @@ circle {
 </select>
 
 <!-- <label for="Partisan Lean">Advantage: </label> -->
-<input type="range" name="Partisan Lean" min=-100 max=100 oninput="handleRange(this)"></input>
+<input type="range" name="Partisan Lean" min=-10 max=10 oninput="handleRange(this)"></input>
 
 <div class="breakdown">
   <div class="bias"></div>
@@ -55,15 +55,21 @@ circle {
 <script src="//d3js.org/topojson.v1.min.js"></script>
 <script>
 
-var width = 960; //make responsive?
-var height = 500; //make responsive?
+var width = 900; //make responsive?
+var height = 600; //make responsive?
 var active = "--";
 var radius = 0;
 var district_stroke_width = 0;
 var bias = 0;
 var plan = '.reg';
-var path = d3.geoPath().projection(d3.geoAlbersUsa());
+var proj = d3.geoAlbersUsa();
+var path = d3.geoPath().projection(proj);
 var g = d3.select("body").append("svg").attr("width", width).attr("height", height).append("g");
+var RED = "#CA0813";
+var BLUE = "#1072BD";
+var PURPLE = "#6F359E";
+var noak_feature;
+
 
 function toggle(newplan) {
   plan = newplan;
@@ -109,6 +115,12 @@ function recolor() {
   reg_red = 0;
   reg_purple = 0;
   reg_blue = 0;
+  var state_fra_red = 0;
+  var state_fra_purple = 0;
+  var state_fra_blue = 0;
+  var state_reg_red = 0;
+  var state_reg_purple = 0;
+  var state_reg_blue = 0;
   fra_rep_colors = {};
   d3
   .selectAll("g.fra path")
@@ -132,22 +144,26 @@ function recolor() {
     fra_red += red;
     fra_purple += purple;
     if (red === seats)
-      return "red";
+      return RED;
     if (blue === seats)
-      return "blue";
-    return "purple";
+      return BLUE;
+    return PURPLE;
   });
   d3
   .selectAll("circle.fra")
   .attr("fill", d => {
     if (fra_rep_colors[d.district][0]) {
       fra_rep_colors[d.district][0]--;
-      return "red";
+      state_fra_red++;
+      return RED;
     } else if (fra_rep_colors[d.district][1]) {
+      state_fra_purple++;
       fra_rep_colors[d.district][1]--;
-      return "purple";
-    } else 
-      return "blue";
+      return PURPLE;
+    } else {
+      state_fra_blue++;
+      return BLUE;
+    }
   });
 
   d3
@@ -155,11 +171,14 @@ function recolor() {
   .attr("fill", d => {
     var blueness = parseFloat(d.dem) + parseFloat(bias);
     if (blueness > 55) {
-      return "blue";
+      state_reg_blue++;
+      return BLUE;
     } else if (blueness < 45) {
-      return "red";
+      state_reg_red++;
+      return RED;
     } else {
-      return "purple";
+      state_reg_purple++;
+      return PURPLE;
     }
   });
 
@@ -169,23 +188,31 @@ function recolor() {
     var blueness = parseFloat(d.properties.dem) + parseFloat(bias);
     if (blueness > 55) {
       reg_blue++;
-      return "blue";
+      return BLUE;
     } else if (blueness < 45) {
       reg_red++;
-      return "red";
+      return RED;
     } else {
       reg_purple++;
-      return "purple";
+      return PURPLE;
     }
   });
-
   if (bias>0)
-    var bias_msg = "D + " + bias;
+    var bias_msg = "Projected Result in a Year Favoring Democrats by " + (50+parseInt(bias)) + "%";
   else if (bias<0)
-    var bias_msg = "R + " + (-bias);
+    var bias_msg = "Projected Result in a Year Favoring Republicans by " + (50-bias) + "%";
   else
-    var bias_msg = "Even";
-  d3.select(".breakdown .bias").text("Advantage: " + bias_msg);
+    var bias_msg = "Projected Result in a 50-50 Year";
+  if (active !== "--") {
+    fra_red = state_fra_red;
+    fra_blue = state_fra_blue;
+    fra_purple = state_fra_purple;
+    reg_red = state_reg_red;
+    reg_blue = state_reg_blue;
+    reg_purple = state_reg_purple;
+  }
+    
+  d3.select(".breakdown .bias").text(bias_msg);
   d3.select(".breakdown .fra").text("D: "+fra_blue+", R: "+fra_red+", Toss-Up: "+fra_purple);
   d3.select(".breakdown .reg").text("D: "+reg_blue+", R: "+reg_red+", Toss-Up: "+reg_purple);
 }
@@ -196,6 +223,12 @@ function ready(error, fv, fra_stats_arr, mopo_stats_arr, id2state_arr) {
   var fra_stats = arr_to_object(fra_stats_arr,"district");
   var mopo_stats = arr_to_object(mopo_stats_arr,"district");
   var id2state = arr_to_object(id2state_arr,"id");
+ 
+  var noak = JSON.parse(JSON.stringify(fv.objects.state));
+  noak.geometries = noak.geometries.filter(x => x.properties.STATEFP !== "02");
+  noak_feature = topojson.feature(fv, noak);
+  proj.fitSize([width, height], noak_feature);
+  path.projection(proj);
 
   g.append("g").attr("class", "reg");
   g.append("g").attr("class", "fra");
@@ -239,6 +272,7 @@ function ready(error, fv, fra_stats_arr, mopo_stats_arr, id2state_arr) {
       .on("click", clicked);
           
     var topostates = topojson.feature(fv, fv.objects.state).features;
+    topostates.sort((x,y) => x.properties.STATEFP>y.properties.STATEFP?1:-1);
 
     g.append("g")
       .attr("class", "states")
@@ -283,7 +317,7 @@ function zoom_on_state(state) {
   } else {
     var projection = d3.geoAlbersUsa();
   }
-  projection.fitExtent([[50,50],[width-50,height-50]], d);
+  projection.fitExtent([[10,10],[width-10,height-10]], d);
   path.projection(projection);
   var scale = projection.scale()/d3.geoAlbersUsa().scale();
   district_stroke_width = scale/5;
@@ -325,6 +359,7 @@ function zoom_on_state(state) {
   .attr("r", radius);
   zoomedDistrictStroke = "0.5px";
   toggle(plan);
+  handleMouseOver(d3.select('path:hover').datum());
     
 }
 
@@ -340,99 +375,99 @@ function reset() {
   g.selectAll("g.states").style("stroke-width", "1px").style("stroke", "white");
   g.selectAll("circle").remove();
   g.style("stroke-width", "1.5px");
-  path.projection(d3.geoAlbersUsa());
+  path.projection(proj);
   d3.selectAll("path").attr("d",path);
+  recolor();
 
 }
 
 function getreplocations(district) {
-    var points = [];
-    for (var i=0; i<parseInt(district.__data__.properties.reps); i++) {
-       points.push(pathcenter(district, points)); 
-    }
-    return points;
+  var points = [];
+  for (var i=0; i<parseInt(district.__data__.properties.reps); i++) {
+    points.push(pathcenter(district, points)); 
+  }
+  return points;
 }
 
 function pathcenter(path,holes) {
-    var bbox = path.getBBox();
-    var p = document.querySelector('svg').createSVGPoint();
-    var step = Math.min(bbox.width, bbox.height)/30;
-    var remaining = new Set();
-    var holeset = new Set(holes.map(JSON.stringify));
-    for (var x=0; x*step<bbox.width; x++) {
-        for (var y=0; y*step<bbox.height; y++) {
-            p.x = x*step + bbox.x;
-            p.y = y*step + bbox.y;
-            if (path.isPointInFill(p) && !holeset.has(JSON.stringify([p.x, p.y]))) {
-                remaining.add(JSON.stringify([x,y]))
-            }
-        }
+  var bbox = path.getBBox();
+  var p = document.querySelector('svg').createSVGPoint();
+  var step = Math.min(bbox.width, bbox.height)/30;
+  var remaining = new Set();
+  var holeset = new Set(holes.map(JSON.stringify));
+  for (var x=0; x*step<bbox.width; x++) {
+    for (var y=0; y*step<bbox.height; y++) {
+      p.x = x*step + bbox.x;
+      p.y = y*step + bbox.y;
+      if (path.isPointInFill(p) && !holeset.has(JSON.stringify([p.x, p.y]))) {
+        remaining.add(JSON.stringify([x,y]))
+      }
     }
-    var required_neighbors = 4;
-    while (true) {
-        var new_remaining = new Set();
-        for (let item of remaining) {
-            var [x,y] = JSON.parse(item);
-            var neighbors = [[x-1,y],[x+1,y],[x,y-1],[x,y+1]];
-            var inside_neighbors = neighbors.filter(p=>remaining.has(JSON.stringify(p))).length
-            if (inside_neighbors === required_neighbors) {
-                new_remaining.add(item)
-            }
-        }
-        if ((new Set([0,remaining.size])).has(new_remaining.size)) {
-            if (required_neighbors === 1) {
-                var [x,y] = JSON.parse([...remaining].pop());
-                p.x = x*step + bbox.x;
-                p.y = y*step + bbox.y;
-                return [p.x, p.y];
-            } else {
-                required_neighbors--;
-            }
-        } else {
-            remaining = new_remaining;
-            required_neighbors = 4;
-        }
+  }
+  var required_neighbors = 4;
+  while (true) {
+    var new_remaining = new Set();
+    for (let item of remaining) {
+      var [x,y] = JSON.parse(item);
+      var neighbors = [[x-1,y],[x+1,y],[x,y-1],[x,y+1]];
+      var inside_neighbors = neighbors.filter(p=>remaining.has(JSON.stringify(p))).length
+      if (inside_neighbors === required_neighbors) {
+        new_remaining.add(item)
+      }
     }
+    if ((new Set([0,remaining.size])).has(new_remaining.size)) {
+      if (required_neighbors === 1) {
+        var [x,y] = JSON.parse([...remaining].pop());
+        p.x = x*step + bbox.x;
+        p.y = y*step + bbox.y;
+        return [p.x, p.y];
+      } else {
+        required_neighbors--;
+      }
+    } else {
+      remaining = new_remaining;
+      required_neighbors = 4;
+    }
+  }
 }
 
 function handleMouseOut(d) {
-    d3.select(".districtname").text("HIDDEN").style("visibility","hidden");
-    d3.select(".repname").text("HIDDEN").style("visibility","hidden");
-    d3.selectAll('.districts path').filter(d=>d.properties.state===active)
-      .style("stroke-width",district_stroke_width + "px");
-    d3.selectAll('circle').attr("r",radius);
+  d3.select(".districtname").text("HIDDEN").style("visibility","hidden");
+  d3.select(".repname").text("HIDDEN").style("visibility","hidden");
+  d3.selectAll('.districts path').filter(d=>d.properties.state===active)
+  .style("stroke-width",district_stroke_width + "px");
+  d3.selectAll('circle').attr("r",radius);
 }
 
 function handleMouseOver(d) {
-    if (active !== "--") {
-        d3.select(".districtname").text(d.properties.state).style("visibility", "visible");
-        var props = d.properties;
-        var lean = parseInt(props.dem) - 50;
-        if (lean > 0)
-            var lean_message = " (D +"+lean+"%)";
-        else if (lean <0)
-            var lean_message = " (R +"+(-lean)+"%)";
-        else
-            var lean_message = " (Toss-Up)";
-        d3.select(".districtname").text(props.district + lean_message).style("visibility", "visible");
-        var rep = props.open === 1 ? "(Open Seat)" : props.rep;
-        if (props.rep)
-            d3.select(".repname").text(rep).style("visibility", "visible");
-        else
-            d3.select(".repname").text("HIDDEN").style("visibility", "hidden");
+  if (active !== "--") {
+    d3.select(".districtname").text(d.properties.state).style("visibility", "visible");
+    var props = d.properties;
+    var lean = parseInt(props.dem) - 50;
+    if (lean > 0)
+      var lean_message = " (D +"+lean+"%)";
+    else if (lean <0)
+      var lean_message = " (R +"+(-lean)+"%)";
+    else
+      var lean_message = " (Toss-Up)";
+    d3.select(".districtname").text(props.district + lean_message).style("visibility", "visible");
+    var rep = props.open === 1 ? "(Open Seat)" : props.rep;
+    if (props.rep)
+      d3.select(".repname").text(rep).style("visibility", "visible");
+    else
+      d3.select(".repname").text("HIDDEN").style("visibility", "hidden");
         
-	//new styling 
-        d3
-        .selectAll('.districts path')
-        .filter(d=>d.properties.state===active && d.properties.district === props.district)
-        .style("stroke-width", district_stroke_width * 3 + "px");
+    d3
+    .selectAll('.districts path')
+    .filter(d=>d.properties.state===active && d.properties.district === props.district)
+    .style("stroke-width", district_stroke_width * 3 + "px");
 
-        d3
-        .selectAll('circle')
-        .filter(d => d.district === props.district)
-        .attr("r",radius*1.33);
+    d3
+    .selectAll('circle')
+    .filter(d => d.district === props.district)
+    .attr("r",radius*1.33);
  
-    }
+  }
 }
 
 </script>
