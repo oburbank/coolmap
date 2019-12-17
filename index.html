@@ -55,8 +55,9 @@ circle {
 <script src="//d3js.org/topojson.v1.min.js"></script>
 <script>
 
-var width = 900; //make responsive?
-var height = 600; //make responsive?
+var width = Math.min(window.innerWidth, window.innerHeight*1.5)
+var height = width*2/3; 
+
 var active = "--";
 var radius = 0;
 var district_stroke_width = 0;
