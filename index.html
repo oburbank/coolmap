@@ -3,7 +3,83 @@
 <style>
 
 body {
-  margin:0;
+  font-family: 'proxima-nova', "Helvetica Neue", Helvetica, Arial, sans-serif;
+  margin: 0;
+}
+
+.infobox {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  grid-template-rows: repeat(3, 20px);
+  grid-gap: 2px;
+  margin-bottom:10px;
+}
+
+button.frabutton {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+button.regbutton {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+select.stateselector {
+  grid-column: 3;
+  grid-row;
+}
+
+div.bias {
+  grid-column: 1 / 4;
+  grid-row: 2;
+}
+
+.rangered {
+  grid-column: 1 / 4;
+  grid-row: 3;
+  background: #CA0813;
+}
+
+.range {
+  grid-column: 1 / 4;
+  grid-row: 3;
+  background:transparent;
+}
+
+.range.blue * {
+  width:50%;
+  height:100%;
+  background:#1072BD;
+}
+
+.range.purple *{
+  width:50%;
+  height:100%;
+  background:#6F359E;
+}
+
+input {
+  grid-column: 1 / 4;
+  grid-row: 3;
+  background:"white";
+}
+
+.breakdown {
+  grid-column: 1 / 4;
+  grid-row: 4;
+}
+
+.districtname {
+  grid-column: 5 / 7;
+  grid-row: 4;
+  text-align: right;
+}
+
+.repname {
+  grid-column: 5 / 7;
+  grid-row: 3;
+  text-align: right;
 }
 
 circle {
@@ -33,34 +109,40 @@ circle {
 </style>
 <body>
 
-<button type="button" onclick="toggle('.fra')">FRA Districts</button>
-<button type="button" onclick="toggle('.reg')">Existing Districts</button>
-
-<select class="stateselector">
-  <option value="--">--Select State--</option>
-</select>
-
-<!-- <label for="Partisan Lean">Advantage: </label> -->
-<input type="range" name="Partisan Lean" min=-10 max=10 oninput="handleRange(this)"></input>
-
-<div class="breakdown">
+<div class="infobox">
+  <button class="frabutton" type="button" onclick="toggle('.fra')">FRA Districts</button>
+  <button class="regbutton" type="button" onclick="toggle('.reg')">Existing Districts</button>
+  <select class="stateselector">
+    <option value="--">--Select State--</option>
+  </select>
   <div class="bias"></div>
-  <div class="fra"></div>
-  <div class="reg"></div>
+  <div class="rangered"></div>
+  <div class="range purple">
+    <div class="reg"></div>
+    <div class="fra"></div>
+  </div>
+  <div class="range blue">
+    <div class="reg"></div>
+    <div class="fra"></div>
+  </div>
+  <input type="range" name="Partisan Lean" min=-10 max=10 oninput="handleRange(this)"></input>
+  <div class="breakdown">
+    <div class="fra"></div>
+    <div class="reg"></div>
+  </div>
+  <div class="districtname"></div>
+  <div class="repname"></div>
 </div>
 
-<div class="districtinfo">
-  <div class="districtname">HIDDEN</div>
-  <div class="repname">HIDDEN</div>
-</div>
 
 <script src="//d3js.org/d3.v4.min.js"></script>
 <script src="//d3js.org/queue.v1.min.js"></script>
 <script src="//d3js.org/topojson.v1.min.js"></script>
 <script>
 
-var width = Math.min(window.innerWidth, window.innerHeight*1.5);
-var height = width*2/3; 
+var width = Math.min(window.innerWidth, window.innerHeight*1.58)-10;
+var height = width*0.63; 
+console.log([width, height]);
 
 var active = "--";
 var radius = 0;
@@ -81,6 +163,7 @@ function toggle(newplan) {
   var oldplan = newplan === '.reg' ? '.fra' : '.reg';
   d3.selectAll(newplan).style('visibility', 'visible');
   d3.selectAll(newplan).style('display', 'unset');
+  d3.selectAll('.infobox ' + newplan).style('display', 'grid');
   d3.selectAll(oldplan).style('visibility', 'hidden');
   d3.selectAll(oldplan).style('display', 'none');
   recolor();
@@ -203,11 +286,11 @@ function recolor() {
     }
   });
   if (bias>0)
-    var bias_msg = "Projected Result in a Year Favoring Democrats by " + (50+parseInt(bias)) + "%";
+    var bias_msg = "Projected Result in a Year Favoring Democrats by " + (50+parseInt(bias)) + "%:";
   else if (bias<0)
-    var bias_msg = "Projected Result in a Year Favoring Republicans by " + (50-bias) + "%";
+    var bias_msg = "Projected Result in a Year Favoring Republicans by " + (50-bias) + "%:";
   else
-    var bias_msg = "Projected Result in a 50-50 Year";
+    var bias_msg = "Projected Result in a 50-50 Year:";
   if (active !== "--") {
     fra_red = state_fra_red;
     fra_blue = state_fra_blue;
@@ -217,9 +300,15 @@ function recolor() {
     reg_purple = state_reg_purple;
   }
     
-  d3.select(".breakdown .bias").text(bias_msg);
+  d3.select(".bias").text(bias_msg);
   d3.select(".breakdown .fra").text("D: "+fra_blue+", R: "+fra_red+", Toss-Up: "+fra_purple);
   d3.select(".breakdown .reg").text("D: "+reg_blue+", R: "+reg_red+", Toss-Up: "+reg_purple);
+  var fra_total = fra_blue + fra_red + fra_purple;
+  var reg_total = reg_blue + reg_red + reg_purple;
+  d3.select(".range.purple .fra").style("width", (fra_blue+fra_purple)/fra_total*100 +"%");
+  d3.select(".range.purple .reg").style("width", (reg_blue+reg_purple)/reg_total*100 +"%");
+  d3.select(".range.blue .fra").style("width", fra_blue/fra_total*100 +"%");
+  d3.select(".range.blue .reg").style("width", reg_blue/reg_total*100 +"%");
 }
 
 function ready(error, fv, fra_stats_arr, mopo_stats_arr, id2state_arr) {
@@ -295,6 +384,7 @@ function ready(error, fv, fra_stats_arr, mopo_stats_arr, id2state_arr) {
                     .attr("value", d=>d.properties.state)
                     .text(d=>d.properties.state);
     recolor();
+    toggle('.reg');
 }
 
 function dropdownChange(d) {
@@ -369,8 +459,8 @@ function zoom_on_state(state) {
 }
 
 function reset() {
-  d3.select(".districtname").text("HIDDEN").style("visibility","hidden");
-  d3.select(".repname").text("HIDDEN").style("visibility", "hidden");
+  d3.select(".districtname").style("visibility","hidden");
+  d3.select(".repname").style("visibility", "hidden");
   d3.select('option').text("--Select State--");
   document.querySelector('select').value = '--';
   active = "--";
@@ -437,8 +527,8 @@ function pathcenter(path,holes) {
 }
 
 function handleMouseOut(d) {
-  d3.select(".districtname").text("HIDDEN").style("visibility","hidden");
-  d3.select(".repname").text("HIDDEN").style("visibility","hidden");
+  d3.select(".districtname").style("visibility","hidden");
+  d3.select(".repname").style("visibility","hidden");
   d3.selectAll('.districts path').filter(d=>d.properties.state===active)
   .style("stroke-width",district_stroke_width + "px");
   d3.selectAll('circle').attr("r",radius);
@@ -460,7 +550,7 @@ function handleMouseOver(d) {
     if (props.rep)
       d3.select(".repname").text(rep).style("visibility", "visible");
     else
-      d3.select(".repname").text("HIDDEN").style("visibility", "hidden");
+      d3.select(".repname").style("visibility", "hidden");
         
     d3
     .selectAll('.districts path')
