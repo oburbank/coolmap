@@ -4,86 +4,93 @@
 
 body {
   font-family: 'proxima-nova', "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 18px;
   margin: 0;
 }
 
 .infobox {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  grid-template-rows: repeat(3, 20px);
+  grid-template-columns: auto 1fr; 
   grid-gap: 2px;
-  margin-bottom:10px;
+  margin-bottom: 10px;
 }
 
-button.frabutton {
+.leftcol {
+  max-width: 460px;
+}
+
+.controls {
+  display: flex;
+  justify-content: stretch;
+  flex-wrap: wrap;
+}
+
+.controls * {
+  flex-grow: 1;
+  margin: 3px;
+}
+
+.bias {
   grid-column: 1;
-  grid-row: 1;
-}
-
-button.regbutton {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-select.stateselector {
-  grid-column: 3;
-  grid-row;
-}
-
-div.bias {
-  grid-column: 1 / 4;
   grid-row: 2;
 }
 
+.placeholder {
+  color: transparent;
+}
+
 .rangered {
-  grid-column: 1 / 4;
+  grid-column: 1;
   grid-row: 3;
   background: #CA0813;
 }
 
 .range {
-  grid-column: 1 / 4;
+  grid-column: 1;
   grid-row: 3;
-  background:transparent;
 }
 
-.range.blue * {
+input {
+  grid-column: 1;
+  grid-row: 3;
+  background:"white";
+}
+
+.range.blue {
   width:50%;
   height:100%;
   background:#1072BD;
 }
 
-.range.purple *{
+.range.purple {
   width:50%;
   height:100%;
   background:#6F359E;
 }
 
-input {
-  grid-column: 1 / 4;
-  grid-row: 3;
-  background:"white";
-}
-
 .breakdown {
-  grid-column: 1 / 4;
+  grid-column: 1;
   grid-row: 4;
 }
 
 .districtname {
-  grid-column: 5 / 7;
+  grid-column: 1 / 3;
   grid-row: 4;
-  text-align: right;
+  justify-self: right;
+  background-color: white;
+  opacity: 0.9;
 }
 
 .repname {
-  grid-column: 5 / 7;
+  grid-column: 1 / 3;
   grid-row: 3;
-  text-align: right;
+  justify-self: right;
+  background-color: white;
+  opacity: 0.9;
 }
 
 circle {
-    pointer-events: none;
+  pointer-events: none;
 }
 
 .districts {
@@ -103,33 +110,29 @@ circle {
 
 .fra {
   visibility: hidden;
-  display: none;
 }
 
 </style>
 <body>
 
 <div class="infobox">
-  <button class="frabutton" type="button" onclick="toggle('.fra')">FRA Districts</button>
-  <button class="regbutton" type="button" onclick="toggle('.reg')">Existing Districts</button>
-  <select class="stateselector">
-    <option value="--">--Select State--</option>
-  </select>
-  <div class="bias"></div>
-  <div class="rangered"></div>
-  <div class="range purple">
-    <div class="reg"></div>
-    <div class="fra"></div>
+  <div class="controls leftcol">
+    <button class="frabutton" type="button" onclick="toggle('.fra')">FRA Districts</button>
+    <button class="regbutton" type="button" onclick="toggle('.reg')">Existing Districts</button>
+    <select class="stateselector">
+      <option value="--">--Select State--</option>
+    </select>
   </div>
-  <div class="range blue">
-    <div class="reg"></div>
-    <div class="fra"></div>
-  </div>
-  <input type="range" name="Partisan Lean" min=-10 max=10 oninput="handleRange(this)"></input>
-  <div class="breakdown">
-    <div class="fra"></div>
-    <div class="reg"></div>
-  </div>
+  <div class="bias leftcol"></div>
+  <div class="bias leftcol placeholder">Projected Result in a Year Favoring Republicans by 60%:</div>
+  <div class="rangered leftcol"></div>
+  <div class="range purple reg leftcol"></div>
+  <div class="range purple fra leftcol"></div>
+  <div class="range blue reg leftcol"></div>
+  <div class="range blue fra leftcol"></div>
+  <input type="range" class="leftcol" name="Partisan Lean" min=-10 max=10 oninput="handleRange(this)"></input>
+  <div class="breakdown fra leftcol"></div>
+  <div class="breakdown reg leftcol"></div>
   <div class="districtname"></div>
   <div class="repname"></div>
 </div>
@@ -140,9 +143,8 @@ circle {
 <script src="//d3js.org/topojson.v1.min.js"></script>
 <script>
 
-var width = Math.min(window.innerWidth, window.innerHeight*1.58)-10;
+var width = Math.min(window.innerWidth, (window.innerHeight-100)*1.58)-10;
 var height = width*0.63; 
-console.log([width, height]);
 
 var active = "--";
 var radius = 0;
@@ -162,10 +164,7 @@ function toggle(newplan) {
   plan = newplan;
   var oldplan = newplan === '.reg' ? '.fra' : '.reg';
   d3.selectAll(newplan).style('visibility', 'visible');
-  d3.selectAll(newplan).style('display', 'unset');
-  d3.selectAll('.infobox ' + newplan).style('display', 'grid');
   d3.selectAll(oldplan).style('visibility', 'hidden');
-  d3.selectAll(oldplan).style('display', 'none');
   recolor();
 }
 
@@ -301,14 +300,14 @@ function recolor() {
   }
     
   d3.select(".bias").text(bias_msg);
-  d3.select(".breakdown .fra").text("D: "+fra_blue+", R: "+fra_red+", Toss-Up: "+fra_purple);
-  d3.select(".breakdown .reg").text("D: "+reg_blue+", R: "+reg_red+", Toss-Up: "+reg_purple);
+  d3.select(".breakdown.fra").text("D: "+fra_blue+", R: "+fra_red+", Toss-Up: "+fra_purple);
+  d3.select(".breakdown.reg").text("D: "+reg_blue+", R: "+reg_red+", Toss-Up: "+reg_purple);
   var fra_total = fra_blue + fra_red + fra_purple;
   var reg_total = reg_blue + reg_red + reg_purple;
-  d3.select(".range.purple .fra").style("width", (fra_blue+fra_purple)/fra_total*100 +"%");
-  d3.select(".range.purple .reg").style("width", (reg_blue+reg_purple)/reg_total*100 +"%");
-  d3.select(".range.blue .fra").style("width", fra_blue/fra_total*100 +"%");
-  d3.select(".range.blue .reg").style("width", reg_blue/reg_total*100 +"%");
+  d3.select(".range.purple.fra").style("width", (fra_blue+fra_purple)/fra_total*100 +"%");
+  d3.select(".range.purple.reg").style("width", (reg_blue+reg_purple)/reg_total*100 +"%");
+  d3.select(".range.blue.fra").style("width", fra_blue/fra_total*100 +"%");
+  d3.select(".range.blue.reg").style("width", reg_blue/reg_total*100 +"%");
 }
 
 function ready(error, fv, fra_stats_arr, mopo_stats_arr, id2state_arr) {
